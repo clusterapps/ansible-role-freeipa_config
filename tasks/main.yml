@@ -1,0 +1,82 @@
+---
+- name: IPA Configuration | Bind User
+  freeipa.ansible_freeipa.ipauser:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: ldapbind
+    first: LDAP
+    last: Bind
+    email: ldapbind@ipa.example.com
+    passwordexpiration: "2023-01-19 23:59:59"
+    password: "ImTh3LDaPr3ader"
+    update_password: on_create
+  
+- name: IPA Configuration | Named administrators
+  freeipa.ansible_freeipa.ipauser:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: "{{ item.name }}"
+    first: "{{ item.first }}"
+    last: "{{ item.last }}"
+    email: "{{ item.email }}"
+    random: yes
+    update_password: on_create
+    shell: '/bin/bash'
+  with_items: "{{ freeipa_admins }}"
+  register: ipaadmins
+
+- name: IPA Configuration | Initial users
+  freeipa.ansible_freeipa.ipauser:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: "{{ item.name }}"
+    first: "{{ item.first }}"
+    last: "{{ item.last }}"
+    email: "{{ item.email }}"
+    random: yes
+    update_password: on_create
+    shell: '/bin/bash'
+  with_items: "{{ freeipa_users }}"
+  register: ipausers
+
+# - name: Admin passwords
+#   debug:
+#     var: ipaadmins
+
+# - name: User passwords
+#   debug:
+#     var: ipausers
+
+- name: IPA Configuration | Add admins to admin group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: admins
+    action: member
+    user: "{{ item.name }}"
+  with_items: "{{ freeipa_admins }}"  
+
+- name: IPA Configuration | Create {{ freeipa_group }} group
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: "{{ freeipa_group }}"
+
+
+- name: IPA Configuration | Add users to {{ freeipa_group }}
+  freeipa.ansible_freeipa.ipagroup:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: "{{ freeipa_group }}"
+    action: member
+    user: "{{ item.name }}"
+  with_items: "{{ freeipa_users }}"   
+
+- name: IPA Configuration | Configure settings for realm DNS zone.
+  freeipa.ansible_freeipa.ipadnszone:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name: "{{ ipaserver_domain }}"
+    allow_sync_ptr: true
+    dynamic_update: true
+    state: present
+
+- name: IPA Configuration | Ensure zone for reverse DNS is present.
+  freeipa.ansible_freeipa.ipadnszone:
+    ipaadmin_password: "{{ ipaserver_admin_password }}"
+    name_from_ip: "{{ freeipaclient_dns_server }}"
+    dynamic_update: true
+    state: present
